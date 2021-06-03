@@ -4,8 +4,9 @@ import torch.nn.functional as F
 
 from Layers import *
 from math import ceil
+from Base import BaseModel
 
-class LightweightConvEncoder(nn.Module):
+class LightweightConvEncoder(BaseModel):
 	def __init__(self, 
 				 in_size=(None, 1, 16000),
 				 nfft=int(25/1000 * 16000),
@@ -15,7 +16,8 @@ class LightweightConvEncoder(nn.Module):
 				 n_down=1,
 				 latent_dim=64,
 				 clamp=True,
-				 vae=False):
+				 vae=False,
+				 verbose=False):
 		super(LightweightConvEncoder, self).__init__()
 		self.in_size = in_size
 		self.nfft = nfft
@@ -29,6 +31,7 @@ class LightweightConvEncoder(nn.Module):
 		self.latent_dim = latent_dim
 		self.clamp = clamp
 		self.vae = vae
+		self.verbose = verbose
 		
 		self.rep = nn.Conv1d(in_channels=1,
 							 out_channels=self.nfft // 2 + 1,
@@ -63,20 +66,21 @@ class LightweightConvEncoder(nn.Module):
 									 out_channels=_conv_linear_channels,
 									 kernel_size=1)
 		self._latent_size = self._get_latent_size()
+		
 
 	def forward(self, x):
-		#print('Input:', x.size())
+		self._verbose(self.verbose, 'Input:', x.size())
 		rep = self.rep_relu(self.rep(x))
-		#print('Representation:', rep.size())
+		self._verbose(self.verbose, 'Representation:', rep.size())
 		padded_rep = self.rep_padding(rep)
-		#print('Padded Representation:', padded_rep.size())
+		self._verbose(self.verbose, 'Padded Representation:', padded_rep.size())
 		x = F.leaky_relu(self.bn1(self.conv1(padded_rep)))
-		#print('First Conv:', x.size())
+		self._verbose(self.verbose, 'First Conv:', x.size())
 		for db in self.down_blocks:
 			x = db(x)
-			#print('Down Block:', x.size())
+			self._verbose(self.verbose, 'Down Block:', x.size())
 		x = self.conv_linear(x)
-		#print('Latent x:', x.size())
+		self._verbose(self.verbose, 'Latent x:', x.size(), '\n')
 		return x
 
 	@staticmethod
@@ -87,6 +91,7 @@ class LightweightConvEncoder(nn.Module):
 		shape = (1, *self.in_size[-2:])
 		x = torch.randn(shape)
 		x = self.forward(x)
+		x = x.squeeze(dim=0)
 		return x.size()
 
 	@staticmethod

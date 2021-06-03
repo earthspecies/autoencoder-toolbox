@@ -14,12 +14,18 @@ class Autoencoder(BaseAutoencoder):
 				 irmae=False,
 				 vae=False,
 				 vq_vae=False,
+				 verbose=False,
 				 **kwargs):
+		super(Autoencoder, self).__init__()
 		self.encoder = encoder
 		self.decoder = decoder
 		self.irmae = irmae
 		self.vae = vae
 		self.vq_vae = vae
+		self.verbose = verbose
+		self.encoder.verbose = verbose
+		self.decoder.verbose = verbose
+		self._latent_size = self.encoder._latent_size
 
 		assert self.vae == encoder.vae, 'Encoder must be set to vae=True'
 
@@ -86,11 +92,15 @@ class Autoencoder(BaseAutoencoder):
 			return x_hat, x
 
 	def sample(self, n_samples, current_device):
-		"""TO DO: fix sampling to account for 2D latent rep"""
-		z = torch.randn(n_samples, self.latent_dim)
+		z = torch.randn(n_samples, *self._latent_size)
 		z = z.to(current_device)
 		x_hat = self.decode(z)
 		return z
 
 	def generate(self, x):
 		return self.forward(x)[0]
+
+#ae = Autoencoder(LightweightConvEncoder(), LightweightConvDecoder(), verbose=True)
+#print(ae(torch.randn(6,1,16000))[0].size())
+#print(ae.encoder._latent_size)
+#rint(ae.sample(10, 'cpu').size())

@@ -4,8 +4,9 @@ import torch.nn.functional as F
 
 from Layers import *
 from math import ceil
+from Base import BaseModel
 
-class LightweightConvDecoder(nn.Module):
+class LightweightConvDecoder(BaseModel):
 	def __init__(self, in_size=(None, 64, 51),
 				 nfft=int(25/1000 * 16000),
 				 hop=int(10/1000 * 16000),
@@ -15,8 +16,9 @@ class LightweightConvDecoder(nn.Module):
 				 latent_dim=64,
 				 crop=1,
 				 out_size=(None, 1, 16000),
-				 clamp=True):
-		super(BaseDecoder, self).__init__()
+				 clamp=True,
+				 verbose=False):
+		super(LightweightConvDecoder, self).__init__()
 		self.in_size = in_size
 		self.nfft = nfft
 		if hop is None:
@@ -30,6 +32,7 @@ class LightweightConvDecoder(nn.Module):
 		self.crop = crop
 		self.out_size = out_size
 		self.clamp = clamp
+		self.verbose = verbose
 
 		self.conv_linear = nn.Conv1d(in_channels=self.latent_dim,
 									 out_channels=self.hidden_units,
@@ -62,20 +65,20 @@ class LightweightConvDecoder(nn.Module):
 		self.activation = torch.tanh
 
 	def forward(self, x):
-		#print('Input:', x.size())
+		self._verbose(self.verbose, 'Input:', x.size())
 		x = self.conv_linear(x)
-		#print('Conv Linear:', x.size())
+		self._verbose(self.verbose, 'Conv Linear:', x.size())
 		for ub in self.up_blocks:
 			x = ub(x)
-			#print('Up Block:',x.size()) 
+			self._verbose(self.verbose, 'Up Block:',x.size()) 
 		x = F.leaky_relu(self.bn1(self.conv1(x)))
-		#print('Conv1:', x.size())
+		self._verbose(self.verbose, 'Conv1:', x.size())
 		x = self.rep_relu(self.cropping(x))
-		#print('Cropped:', x.size())
+		self._verbose(self.verbose, 'Cropped:', x.size())
 		irep = self.conv_irep(x)
-		#print('iRep:', irep.size())
+		self._verbose(self.verbose, 'iRep:', irep.size())
 		x = self.padding(irep)
-		#print('x:', x.size())
+		self._verbose(self.verbose, 'x:', x.size(), '\n')
 		x = self.activation(x)
 		return x
 
