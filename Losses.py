@@ -86,6 +86,21 @@ def total_loss(y_pred, y_true, stft):
 	l = w1*l1 + w2*l2 + w3*l3
 	return l
 
+def perceptual_loss(y_pred, y_true, stft, weights=[1, 1e-1, 2e-2]):
+	stft = stft.to(y_pred.device)
+	assert stft.dB==False, print('Spectral convergence uses linearly scaled spectrograms')
+	y_pred_2spec = stft_transform(y_pred, stft)
+	y_true_2spec = stft_transform(y_true, stft)
+
+	w1, w2, w3 = weights
+
+	l1 = torch.mean(torch.abs(y_true - y_pred))
+	l2 = torch.mean(torch.abs(y_true_2spec - y_pred_2spec))
+	l3 = fnorm(y_true_2spec - y_pred_2spec) / fnorm(y_true_2spec)
+	
+	l = w1*l1 + w2*l2 + w3*l3
+	return l
+
 @pit_wrapper_loss
 def pit_mae_loss(y_pred, y_true):
 	return mae_loss(y_pred, y_true)

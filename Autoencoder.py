@@ -89,7 +89,7 @@ class Autoencoder(BaseAutoencoder):
 		elif self.vq_vae:
 			return x_hat, x, z, loss, perplexity
 		else:
-			return x_hat, x
+			return x_hat#, x
 
 	def sample(self, n_samples, current_device):
 		z = torch.randn(n_samples, *self._latent_size)

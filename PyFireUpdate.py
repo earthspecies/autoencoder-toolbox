@@ -117,7 +117,7 @@ class Trainer(object):
 				metric_history_train = None
 				metric_history_val = None
 			start_epoch = ckpt['epoch']
-			print(f'Restarting at epoch {start_epoch}\n')
+			print(f'Restarting at epoch {start_epoch + 1}\n')
 		else:
 			start_epoch = 0
 
@@ -194,8 +194,8 @@ class Trainer(object):
 				if ((epoch+1) >= self.saver['epoch']) and ((epoch+1) % self.saver['save_every'] == 0):
 					file_name = f'{self.dest}/Checkpoints/ckpt{epoch+1}.tar'
 					ckpt_dict = {
-						'model_state_dict': model.state_dict(),
-						'optimizer_state_dict': optimizer.state_dict(),
+						'model_state_dict': self.model.state_dict(),
+						'optimizer_state_dict': self.optimizer.state_dict(),
 						'epoch': epoch + 1, 
 						'train_losses': loss_history_train,
 						'val_losses': loss_history_val
