@@ -105,3 +105,86 @@ class LightweightConvDecoder(BaseModel):
 	def _conv1dtranspose_out_size(in_size, k, s, pad, opad=0):
 		out = (in_size-1)*s + k-2*pad + opad
 		return out
+    
+class HeavyDecoder(BaseModel):
+	def __init__(self, encoder):
+		super(HeavyDecoder, self).__init__()
+		self.in_size = encoder._get_latent_size()
+		self.nfft = encoder.nfft
+		self.hop = encoder.hop
+		self.hidden_units = encoder.hidden_units
+		self.latent_dim = encoder.latent_dim
+		self.res_blocks = encoder.res_blocks
+
+		self.conv_initial = nn.Conv1d(self.latent_dim, self.hidden_units, 1)
+		self.blocks = nn.ModuleList([ResidualBlock1d(self.hidden_units, 
+													 self.hidden_units)] * self.res_blocks)
+		self.conv1 = nn.ConvTranspose1d(in_channels=self.hidden_units,
+										out_channels=self.hidden_units,
+										kernel_size=3,
+										stride=1,
+										padding=1)
+		self.bn1 = nn.BatchNorm1d(self.hidden_units)
+		self.conv2 = nn.ConvTranspose1d(in_channels=self.hidden_units,
+										out_channels=self.hidden_units,
+										kernel_size=3,
+										stride=1,
+										padding=1)
+		self.bn2 = nn.BatchNorm1d(self.hidden_units)
+		self.conv3 = nn.ConvTranspose1d(in_channels=self.hidden_units,
+							   out_channels=self.hidden_units,
+							   kernel_size=4,
+							   stride=2,
+							   padding=1)
+		self.bn3 = nn.BatchNorm1d(self.hidden_units)
+		self.conv4 = nn.ConvTranspose1d(in_channels=self.hidden_units,
+										out_channels=self.hidden_units,
+										kernel_size=3,
+										stride=1,
+										padding=1)
+		self.bn4 = nn.BatchNorm1d(self.hidden_units)
+		self.conv5 = nn.ConvTranspose1d(in_channels=self.hidden_units,
+										out_channels=self.nfft // 2 + 1,
+										kernel_size=3,
+										stride=1,
+										padding=1)
+		self.bn5 = nn.BatchNorm1d(self.nfft // 2 + 1)
+		self.cropping = Cropping1D(encoder.padding.pad)
+		self.irep = nn.ConvTranspose1d(in_channels=self.nfft // 2 + 1,
+							 out_channels=1,
+							 kernel_size=self.nfft,
+							 stride=self.hop,
+							 padding=self.nfft // 2)
+		self._conv1dtranspose_out_size = self._conv1dtranspose_out_size(in_size=encoder._rep_size[-1],
+																   k=self.nfft,
+																   s=self.hop,
+																   pad=self.nfft // 2)
+		self.wf_padding = Padding1D(encoder.in_size[-1] - self._conv1dtranspose_out_size)
+
+	def forward(self, x):
+		#print(x.size())
+		x = self.conv_initial(x)
+		#print(x.size())
+		for b in self.blocks:
+			x = b(x)
+		#print(x.size())
+		x = F.leaky_relu(self.bn1(self.conv1(x))) + x
+		#print(x.size())
+		x = F.leaky_relu(self.bn2(self.conv2(x))) + x
+		#print(x.size())
+		x = F.leaky_relu(self.bn3(self.conv3(x)))
+		#print(x.size())
+		x = F.leaky_relu(self.bn4(self.conv4(x))) + x
+		#print(x.size())
+		x = F.leaky_relu(self.bn5(self.conv5(x)))
+		#print(x.size())
+		x = self.cropping(x)
+		#print(x.size())
+		x = self.irep(x)
+		#print(x.size())
+		x = self.wf_padding(x)
+		return x
+	@staticmethod
+	def _conv1dtranspose_out_size(in_size, k, s, pad, opad=0):
+		out = (in_size-1)*s + k-2*pad + opad
+		return out
