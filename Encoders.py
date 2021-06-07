@@ -146,7 +146,7 @@ class ResidualBlock1d(nn.Module):
 		return x
 
 class HeavyEncoder(BaseModel):
-	def __init__(self, in_size=(None, 1, 16000), nfft=int(25 / 1000 * 16000), hop=int(10 / 1000 * 16000), hidden_units=768, latent_dim=64, res_blocks=4):
+	def __init__(self, in_size=(None, 1, 24414), nfft=int(25 / 1000 * 24414), hop=int(10 / 1000 * 24414), hidden_units=768, latent_dim=64, res_blocks=4):
 		super(HeavyEncoder, self).__init__()
 		self.in_size = in_size
 		self.nfft = nfft

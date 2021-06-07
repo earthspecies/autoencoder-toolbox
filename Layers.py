@@ -341,16 +341,17 @@ class MLP(nn.Module):
 		else:
 			hidden_units = self.latent_dim
 		for k in range(layers):
-			linear_layer = nn.Linear(hidden_units, hidden_units, bias=False)
+			linear_layer = nn.Conv1d(hidden_units, hidden_units, 3, stride=1, padding=1, bias=False)
+			#linear_layer = nn.Linear(hidden_units, hidden_units, bias=False)
 			self.hidden.append(linear_layer)
 
 	def forward(self, z):
-		if self.channels_first:
-			z = z.permute(0, 2, 1).contiguous()
+		#if self.channels_first:
+			#z = z.permute(0, 2, 1).contiguous()
 		for l in self.hidden:
 			z = l(z)
-		if self.channels_first:
-			z = z.permute(0, 2, 1).contiguous()
+		#if self.channels_first:
+			#z = z.permute(0, 2, 1).contiguous()
 		return z
 
 class Jitter(nn.Module):

@@ -7,6 +7,9 @@ import librosa
 from torch.utils.data import Dataset
 import matplotlib.pyplot as plt
 import numpy as np
+import glob
+import re
+from sklearn.model_selection import StratifiedKFold
 
 def show_spec(signal, kernel_size=int(25/1000*16000), stride=int(10/1000*16000)):
 	S = librosa.stft(signal, n_fft=kernel_size, hop_length=stride)
@@ -15,6 +18,70 @@ def show_spec(signal, kernel_size=int(25/1000*16000), stride=int(10/1000*16000))
 	plt.gca().invert_yaxis()
 	plt.axis('off')
 	plt.show()
+
+class MacaqueDataset(Dataset):
+	def __init__(self, 
+				 subset='train', 
+				 sample_rate=24414, 
+				 base_path='Data/Macaque', 
+				 seed=42):
+		self.base_path = base_path
+		self.subset = subset
+		self.sample_rate = sample_rate
+		self.seed = seed
+		random.seed(seed)
+		
+		self.files = sorted(glob.glob(f'{self.base_path}/*/*.wav'))
+		self.audios = [self.fix_length(librosa.load(f, sr=None)[0], 
+									   length=self.sample_rate) for f in self.files]
+		self.labels = [re.split(r'/', f)[-2] for f in self.files]
+		
+		label_dict = {l:i for i,l in enumerate(np.unique(self.labels))}
+		self.int_labels = [label_dict[l] for l in self.labels]
+		
+		x_train, y_train, x_test, y_test = self.train_test_split(self.audios,
+																 self.int_labels)
+		if subset == 'train':
+			self.len = len(x_train)
+			self.x = x_train
+			self.y = y_train
+		elif subset == 'test':
+			self.len = len(x_test)
+			self.x = x_test
+			self.y = y_test
+
+	def __len__(self):
+		return self.len
+
+	def __getitem__(self, idx):
+		x = self.x[idx]
+		x = torch.tensor(x).unsqueeze(dim=0)
+		return x, x
+	
+	@staticmethod
+	def fix_length(signal, length=24414):
+		signal_length = len(signal)
+		if signal_length < length:
+			tail_length = random.randint(0, length-signal_length)
+			head_length = length - (signal_length + tail_length)
+
+			signal = np.concatenate([np.zeros(head_length), signal, np.zeros(tail_length)]).astype('float32')
+		else:
+			signal = signal[:length]
+		return signal
+	
+	@staticmethod
+	def train_test_split(X, Y, n_folds=5, seed=42):
+		skf = StratifiedKFold(n_splits=5,
+							  shuffle=True,
+							  random_state=seed)
+		train_split, test_split = list(skf.split(X, Y))[0]
+		
+		X_train = [X[i] for i in train_split]
+		X_test = [X[i] for i in test_split]
+		Y_train = [Y[i] for i in train_split]
+		Y_test = [Y[i] for i in test_split]
+		return X_train, Y_train, X_test, Y_test
 
 class ChirpDataset(Dataset):
 	def __init__(self, 

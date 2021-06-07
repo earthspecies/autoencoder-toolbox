@@ -45,12 +45,17 @@ if __name__ == '__main__':
 	global trainer_params
 	trainer_params = config['trainer_params']
 
-	train_set = ChirpDataset(subset='train',
-							 n_samples=dataset_config['n_train_samples'],
-							 **dataset_config['signal_params'])
-	val_set = ChirpDataset(subset='test',
-						   n_samples=dataset_config['n_test_samples'],
-						   **dataset_config['signal_params'])
+	if dataset_config['name'] == 'Chirp':
+		train_set = ChirpDataset(subset='train',
+								 n_samples=dataset_config['n_train_samples'],
+								 **dataset_config['signal_params'])
+		val_set = ChirpDataset(subset='test',
+							   n_samples=dataset_config['n_test_samples'],
+							   **dataset_config['signal_params'])
+	elif dataset_config['name'] == 'Macaque':
+		train_set = MacaqueDataset(subset='train')
+		val_set = MacaqueDataset(subset='test')
+        
 	train_loader = DataLoader(train_set,
 							  batch_size=learning_params['batch_size'],
 							  shuffle=True)
@@ -66,7 +71,6 @@ if __name__ == '__main__':
 
 	if decoder_config['model_name'] == 'LightweightConv':
 		decoder = LightweightConvDecoder(**decoder_config['model_params'])
-
 
 	autoencoder = Autoencoder(encoder, 
 							  decoder,
