@@ -6,7 +6,7 @@ from Layers import *
 from math import ceil
 from Base import BaseModel
 
-class LightweightConvEncoder(BaseModel):
+class ToyConvEncoder(BaseModel):
 	def __init__(self, 
 				 in_size=(None, 1, 16000),
 				 nfft=int(25/1000 * 16000),
@@ -15,10 +15,13 @@ class LightweightConvEncoder(BaseModel):
 				 n_res_blocks=1,
 				 n_down=1,
 				 latent_dim=64,
+				 transform = 'conv1d',
+				 double_channels = False,
 				 clamp=True,
 				 vae=False,
-				 verbose=False):
-		super(LightweightConvEncoder, self).__init__()
+				 verbose=False,
+				 **kwargs):
+		super(ToyConvEncoder, self).__init__()
 		self.in_size = in_size
 		self.nfft = nfft
 		if hop is None:
@@ -32,24 +35,41 @@ class LightweightConvEncoder(BaseModel):
 		self.clamp = clamp
 		self.vae = vae
 		self.verbose = verbose
+		self.transform = transform
+		self.double_channels = double_channels
 		
-		self.rep = nn.Conv1d(in_channels=1,
-							 out_channels=self.nfft // 2 + 1,
-							 kernel_size=self.nfft,
-							 stride=self.hop,
-							 padding=self.nfft // 2)
-		if self.clamp:
-			self.rep_relu = ClampedReLU().apply
-		else:
-			self.rep_relu = nn.ReLU()
+		if self.transform == 'conv1d':
+			_out_channels = self.nfft // 2 + 1
+			if self.double_channels: _out_channels *= 2
+			self.rep = nn.Conv1d(in_channels=1,
+								 out_channels=_out_channels,
+								 kernel_size=self.nfft,
+								 stride=self.hop,
+								 padding=self.nfft // 2)
+			if self.clamp:
+				self.rep_relu = ClampedReLU().apply
+			else:
+				self.rep_relu = nn.ReLU()
+		elif self.transform == 'stft':
+			self.post_process = lambda x: torch.cat(list(x), dim=1) 
+			_out_channels = 2 * (self.nfft // 2 + 1)
+			self.coords = kwargs['stft_coords']
+			if self.coords == 'polar':
+				self.phase_unaware = kwargs['phase_unaware']
+				if self.phase_unaware:
+					_out_channels = self.nfft // 2 + 1
+					self.post_process = lambda x: list(x)
+			self.rep = STFT(kernel_size=self.nfft,
+							stride=self.hop,
+							coords=self.coords)                 
 
-		self._rep_size = (nfft // 2 + 1, self._conv1d_out_size(in_size=self.in_size[-1],
+		self._rep_size = (_out_channels, self._conv1d_out_size(in_size=self.in_size[-1],
 						  k=self.nfft,
 						  s=self.hop,
 						  p=self.nfft // 2))
 		self._rep_padding = (ceil(self._rep_size[-1] / 2**n_down) * 2**n_down) - self._rep_size[-1]
 		self.rep_padding = Padding1D(pad=self._rep_padding)
-		self.conv1 = nn.Conv1d(in_channels=self.nfft // 2 + 1,
+		self.conv1 = nn.Conv1d(in_channels=_out_channels,
 							   out_channels=self.hidden_units,
 							   kernel_size=3,
 							   stride=1,
@@ -70,7 +90,15 @@ class LightweightConvEncoder(BaseModel):
 
 	def forward(self, x):
 		self._verbose(self.verbose, 'Input:', x.size())
-		rep = self.rep_relu(self.rep(x))
+
+		if self.transform == 'conv1d':
+			rep = self.rep_relu(self.rep(x))
+		elif self.transform == 'stft':
+			rep = self.post_process(self.rep(x))
+			if self.coords == 'polar' and self.phase_unaware:
+				phase, rep = rep
+			else:
+				phase = None
 		self._verbose(self.verbose, 'Representation:', rep.size())
 		padded_rep = self.rep_padding(rep)
 		self._verbose(self.verbose, 'Padded Representation:', padded_rep.size())
@@ -81,7 +109,11 @@ class LightweightConvEncoder(BaseModel):
 			self._verbose(self.verbose, 'Down Block:', x.size())
 		x = self.conv_linear(x)
 		self._verbose(self.verbose, 'Latent x:', x.size(), '\n')
-		return x
+		
+		if self.transform == 'stft' and phase is not None:
+			return phase, x
+		else:
+			return x
 
 	@staticmethod
 	def _conv1d_out_size(in_size, k, s, p):
@@ -91,6 +123,8 @@ class LightweightConvEncoder(BaseModel):
 		shape = (1, *self.in_size[-2:])
 		x = torch.randn(shape)
 		x = self.forward(x)
+		if type(x) == tuple:
+			x = x[-1]
 		x = x.squeeze(dim=0)
 		return x.size()
 
@@ -113,7 +147,7 @@ class LightweightConvEncoder(BaseModel):
 		down_block = nn.Sequential(*layers)
 		return down_block
 
-class HeavyEncoder(BaseModel):
+class ConvEncoder(BaseModel):
 	def __init__(self, 
 				 in_size=(None, 1, 16000), 
 				 nfft=int(25 / 1000 * 16000), 
@@ -121,10 +155,13 @@ class HeavyEncoder(BaseModel):
 				 hidden_units=768, 
 				 latent_dim=64, 
 				 res_blocks=4,
+				 transform='conv1d',
 				 clamp=True,
+				 double_channels=False,
 				 vae=False,
-				 verbose=False):
-		super(HeavyEncoder, self).__init__()
+				 verbose=False,
+				 **kwargs):
+		super(ConvEncoder, self).__init__()
 		self.in_size = in_size
 		self.nfft = nfft
 		if hop is None:
@@ -137,23 +174,42 @@ class HeavyEncoder(BaseModel):
 		self.vae = vae
 		self.clamp = clamp
 		self.verbose = verbose
+		self.transform = transform
+		self.double_channels = double_channels
 
-		self.rep = nn.Conv1d(in_channels=1,
-							 out_channels=self.nfft // 2 + 1,
-							 kernel_size=self.nfft,
-							 stride=self.hop,
-							 padding=self.nfft // 2)
-		if self.clamp:
-			self.rep_relu = ClampedReLU().apply
-		else:
-			self.rep_relu = nn.ReLU()
-		self._rep_size = (nfft // 2 + 1, self._conv1d_out_size(in_size=self.in_size[-1],
-														  k=self.nfft,
-														  s=self.hop,
-														  p=self.nfft // 2))
+		if self.transform == 'conv1d':
+			_out_channels = self.nfft // 2 + 1
+			if self.double_channels: _out_channels *= 2
+			self.rep = nn.Conv1d(in_channels=1,
+								 out_channels=_out_channels,
+								 kernel_size=self.nfft,
+								 stride=self.hop,
+								 padding=self.nfft // 2)
+			if self.clamp:
+				self.rep_relu = ClampedReLU().apply
+			else:
+				self.rep_relu = nn.ReLU()
+		elif self.transform == 'stft':
+			self.post_process = lambda x: torch.cat(list(x), dim=1) 
+			_out_channels = 2 * (self.nfft // 2 + 1)
+			self.coords = kwargs['stft_coords']
+			if self.coords == 'polar':
+				self.phase_unaware = kwargs['phase_unaware']
+				if self.phase_unaware:
+					_out_channels = self.nfft // 2 + 1
+					self.post_process = lambda x: list(x)
+			self.rep = STFT(kernel_size=self.nfft,
+							stride=self.hop,
+							coords=self.coords)                 
+
+		self._rep_size = (_out_channels, self._conv1d_out_size(in_size=self.in_size[-1],
+						  k=self.nfft,
+						  s=self.hop,
+						  p=self.nfft // 2))
+        
 		self.padding = Padding1D(pad=self._rep_size[-1] % 2)
 		
-		self.conv1 = nn.Conv1d(in_channels=self.nfft // 2 + 1,
+		self.conv1 = nn.Conv1d(in_channels=_out_channels,
 							   out_channels=self.hidden_units,
 							   kernel_size=3,
 							   stride=1,
@@ -197,7 +253,16 @@ class HeavyEncoder(BaseModel):
 
 	def forward(self, x):
 		self._verbose(self.verbose, 'Input:', x.size())
-		x_rep = self.rep_relu(self.rep(x))
+
+		if self.transform == 'conv1d':
+			x_rep = self.rep_relu(self.rep(x))
+		elif self.transform == 'stft':
+			x_rep = self.post_process(self.rep(x))
+			if self.coords == 'polar' and self.phase_unaware:
+				phase, x_rep = x_rep
+			else:
+				phase = None
+                
 		self._verbose(self.verbose, 'Representation:', x_rep.size())
 		x_rep = self.padding(x_rep)
 		self._verbose(self.verbose, 'Padded Representation:', x_rep.size())
@@ -219,15 +284,24 @@ class HeavyEncoder(BaseModel):
 			self._verbose(self.verbose, 'X:', x.size())
 		x = self.conv_final(x)
 		self._verbose(self.verbose, 'Latent:', x.size())
-		return x
+        
+		if self.transform == 'stft' and phase is not None:
+			return phase, x
+		else:
+			return x
 
 	@staticmethod
 	def _conv1d_out_size(in_size, k, s, p):
 		return (in_size - (k-1) + 2*p) // s + 1
 
 	def _get_latent_size(self):
+		v = self.verbose
+		self.verbose = False
 		shape = (1, *self.in_size[-2:])
 		x = torch.randn(shape)
 		x = self.forward(x)
+		if type(x) == tuple:
+			x = x[-1]
 		x = x.squeeze(dim=0)
+		self.verbose = v
 		return x.size()

@@ -98,10 +98,10 @@ class Trainer(object):
 					raise ValueError('Choose a different name before proceeding.')
 	
 	def fit(self, train_loader, val_loader, epochs):
-		ckpts = glob.glob(f'{self.dest}/Checkpoints/ckpt*.tar')
+		ckpts = glob.glob(f'{self.dest}Checkpoints/ckpt*.pth.tar')
 		if len(ckpts) > 0:
 			ckpts = sorted(ckpts, 
-						   key=lambda x: int(re.search('\d+', x)[0]))
+						   key=lambda x: int(re.search('\d+', re.split(r'/', x)[-1])[0]))
 			ckpt_path = ckpts[-1]
 			print(f'Loading ckpt: {ckpt_path}\n')
 			ckpt = torch.load(ckpt_path, 
@@ -117,7 +117,7 @@ class Trainer(object):
 				metric_history_train = None
 				metric_history_val = None
 			start_epoch = ckpt['epoch']
-			print(f'Restarting at epoch {start_epoch + 1}\n')
+			print(f'Loading ckpt and restarting at epoch {start_epoch + 1}\n')
 		else:
 			start_epoch = 0
 
@@ -192,7 +192,7 @@ class Trainer(object):
 
 			if self.saver is not None:
 				if ((epoch+1) >= self.saver['epoch']) and ((epoch+1) % self.saver['save_every'] == 0):
-					file_name = f'{self.dest}/Checkpoints/ckpt{epoch+1}.tar'
+					file_name = f'{self.dest}/Checkpoints/ckpt{epoch+1}.pth.tar'
 					ckpt_dict = {
 						'model_state_dict': self.model.state_dict(),
 						'optimizer_state_dict': self.optimizer.state_dict(),

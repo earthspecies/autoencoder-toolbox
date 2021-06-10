@@ -8,9 +8,9 @@ import argparse
 import json
 
 from Datasets import *
-from Autoencoder import Autoencoder
-from Encoders import *
-from Decoders import *
+from AutoencoderUpdate import Autoencoder
+from EncodersUpdate import *
+from DecodersUpdate import *
 from PyFireUpdate import Trainer
 from Utils import *
 
@@ -26,7 +26,7 @@ if __name__ == '__main__':
 
 	args = parser.parse_args()
 
-	with open(f'Configs/{args.config}') as f:
+	with open(f'ConfigsUpdate/{args.config}') as f:
 		data = f.read()
 	config = json.loads(data)
 
@@ -73,15 +73,15 @@ if __name__ == '__main__':
 							batch_size=learning_params['batch_size'],
 							shuffle=False)
 
-	if encoder_config['model_name'] == 'LightweightConv':
-		encoder = LightweightConvEncoder(**encoder_config['model_params'])
-	elif encoder_config['model_name'] == 'HeavyConv':
-		encoder = HeavyEncoder(**encoder_config['model_params'])
+	if encoder_config['model_name'] == 'ToyConv':
+		encoder = ToyConvEncoder(**encoder_config['model_params'])
+	elif encoder_config['model_name'] == 'Conv':
+		encoder = ConvEncoder(**encoder_config['model_params'])
 
-	if decoder_config['model_name'] == 'LightweightConv':
-		decoder = LightweightConvDecoder(**decoder_config['model_params'])
-	elif decoder_config['model_name'] == 'HeavyConv':
-		decoder = HeavyDecoder(**decoder_config['model_params'])
+	if decoder_config['model_name'] == 'ToyConv':
+		decoder = ToyConvDecoder(**decoder_config['model_params'])
+	elif decoder_config['model_name'] == 'Conv':
+		decoder = ConvDecoder(**decoder_config['model_params'])
 
 	autoencoder = Autoencoder(encoder, 
 							  decoder,

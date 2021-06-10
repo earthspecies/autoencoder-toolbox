@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import random
 import librosa
+import musdb
 
 from torch.utils.data import Dataset
 import matplotlib.pyplot as plt
@@ -10,6 +11,7 @@ import numpy as np
 import glob
 import re
 from sklearn.model_selection import StratifiedKFold
+import pandas as pd
 
 def show_spec(signal, kernel_size=int(25/1000*16000), stride=int(10/1000*16000)):
 	S = librosa.stft(signal, n_fft=kernel_size, hop_length=stride)
@@ -139,3 +141,68 @@ class ChirpDataset(Dataset):
 		off_ramp = 0.5*(1. + np.cos( (np.pi/ramp_duration)*t ))
 
 		return off_ramp
+
+class ESCDataset(Dataset):
+	def __init__(self, subset='train', test_fold=5, data='Data/anno.pkl'):
+		self.subset = subset
+		self.test_fold = test_fold
+		self.data = pd.read_pickle(data)
+		
+		train_data = self.data[self.data.fold != self.test_fold]
+		test_data = self.data[self.data.fold == self.test_fold]
+		
+		if self.subset == 'train':
+			self.x = train_data
+		elif self.subset == 'test':
+			self.x = test_data
+		self.len = len(self.x)
+		
+	def __getitem__(self, idx):
+		x = self.x.audio.iloc[idx]
+		x = torch.Tensor(x).unsqueeze(dim=0)
+		return x, x
+	
+	def __len__(self):
+		return self.len
+    
+class MusDB18Dataset(torch.utils.data.Dataset):
+	def __init__(self, 
+				 n_samples=5000,
+				 duration=4., 
+				 sample_rate=44100,
+				 elements=[
+					 'vocals', 
+					 'drums',
+					 'bass',
+					 'other'
+				 ],
+				 split='train',
+				 root='Data',
+				 seed=42):
+		self.n_samples = n_samples
+		self.duration = duration
+		self.sample_rate = sample_rate
+		self.elements = elements
+		self.split = split
+		self.root = root
+		self.seed = seed
+		random.seed(seed)
+        
+		self.mus = musdb.DB(root=self.root,
+							subsets=self.split)
+		self.len=n_samples
+    
+	def __len__(self):
+		return self.len
+    
+	def __getitem__(self, idx):
+		if self.split == 'test':
+			random.seed(idx)
+            
+		track = random.choice(self.mus.tracks)
+		track.chunk_duration = self.duration
+		track.chunk_start = random.uniform(0, track.duration - track.chunk_duration)
+		element = random.choice(self.elements)
+		x = track.targets[element].audio.T[0]
+		x = torch.Tensor(x).unsqueeze(dim=0)
+		return x, x

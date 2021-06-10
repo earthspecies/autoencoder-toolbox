@@ -123,7 +123,7 @@ class iSTFT(nn.Module):
 
 	def forward(self, S1, S2):
 		if self.coords == 'cartesian':
-			S_real, S_imag = S1, S2
+			S_real, S_imag = S1.unsqueeze(dim=-1), S2.unsqueeze(dim=-1)
 		elif self.coords == 'polar':
 			S_phase, S_mag = S1, S2
 			if self.dB:
@@ -341,7 +341,7 @@ class MLP(nn.Module):
 		else:
 			hidden_units = self.latent_dim
 		for k in range(layers):
-			linear_layer = nn.Conv1d(hidden_units, hidden_units, 3, stride=1, padding=1, bias=False)
+			linear_layer = nn.Conv1d(hidden_units, hidden_units, 1, stride=1, bias=False)
 			#linear_layer = nn.Linear(hidden_units, hidden_units, bias=False)
 			self.hidden.append(linear_layer)
 
