@@ -11,7 +11,7 @@ from Datasets import *
 from Autoencoder import Autoencoder
 from Encoders import *
 from Decoders import *
-from PyFireUpdate import Trainer
+from PyFire import Trainer
 from Utils import *
 
 from Losses import *
@@ -19,6 +19,9 @@ from Metrics import *
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
+
+	seed_everything()
+    
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument('-c', '--config', type=str,
@@ -73,34 +76,74 @@ if __name__ == '__main__':
 							batch_size=learning_params['batch_size'],
 							shuffle=False)
 
-	if encoder_config['model_name'] == 'LightweightConv':
-		encoder = LightweightConvEncoder(**encoder_config['model_params'])
-	elif encoder_config['model_name'] == 'HeavyConv':
-		encoder = HeavyEncoder(**encoder_config['model_params'])
+	if encoder_config['model_name'] == 'ToyConv':
+		encoder = ToyConvEncoder(**encoder_config['model_params'])
+	elif encoder_config['model_name'] == 'Conv':
+		encoder = ConvEncoder(**encoder_config['model_params'])
+	if encoder_config['model_name'] == 'ToyConvV0':
+		encoder = ToyConvEncoderV0()
 
-	if decoder_config['model_name'] == 'LightweightConv':
-		decoder = LightweightConvDecoder(**decoder_config['model_params'])
-	elif decoder_config['model_name'] == 'HeavyConv':
-		decoder = HeavyDecoder(**decoder_config['model_params'])
+	if decoder_config['model_name'] == 'ToyConv':
+		decoder = ToyConvDecoder(**decoder_config['model_params'])
+	elif decoder_config['model_name'] == 'Conv':
+		decoder = ConvDecoder(**decoder_config['model_params'])
+	elif decoder_config['model_name'] == 'ToyConvV0':
+		decoder = ToyConvDecoderV0()
 
 	autoencoder = Autoencoder(encoder, 
 							  decoder,
 							  **autoencoder_config['model_params'])
+	autoencoder.apply(weights_init)
 
 	optimizer = torch.optim.Adam(autoencoder.parameters(), 
 								 lr=learning_params['learning_rate'])
-	scheduler = None#torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
-
+	scheduler = trainer_params['scheduler']
+	if scheduler is not None:
+		if scheduler['type'] == 'plateau':
+			scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', **scheduler['kwargs'])
+		elif scheduler['type'] == 'step':
+			scheduler = torch.optim.lr_scheduler.StepLR(optimizer, **scheduler['kwargs'])
+		elif scheduler['type'] == 'multi_step':
+			scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, **scheduler['kwargs'])
+        
 	stft = STFT(kernel_size=encoder_config['model_params']['nfft'],
 				stride=encoder_config['model_params']['hop'],
 				coords='polar',
 				dB=False)
+    
+	if autoencoder.vae:
+		recon_loss_fx = lambda x, y: vae_perceptual_loss(*x, stft=stft)
+		loss_func = {'Perceptual_Loss': recon_loss_fx}
+		kld_loss_fx = lambda x, y: vae_kld_loss(*x)
+		trainer_params['params']['kld_loss'] = kld_loss_fx
+		assert len(trainer_params['params']['weights']) == 2
+        
+		metric_fx = vae_si_sdr
+		metric_func = {'SI_SDR': metric_fx}
+	elif autoencoder.vq_vae:
+		recon_loss_fx = lambda x, y: vae_perceptual_loss(*x, stft=stft)
+		loss_func = {'Perceptual_Loss': recon_loss_fx}
+		latent_loss_fx = lambda x, y: vq_vae_latent_loss(*x)
+		trainer_params['params']['latent_loss'] = latent_loss_fx
+        
+		metric_fx = vae_si_sdr
+		metric_func = {'SI_SDR': metric_fx}
+	else:    
+		loss_fx = lambda x, y: perceptual_loss(x, y, stft=stft)
+		loss_func = {'Perceptual_Loss': loss_fx}
 
-	loss_fx = lambda x, y: perceptual_loss(x, y, stft=stft)
-	loss_func = {'Perceptual_Loss': loss_fx}
-
-	metric_fx = si_sdr
-	metric_func = {'SI_SDR': metric_fx}
+		metric_fx = si_sdr
+		metric_func = {'SI_SDR': metric_fx}
+        
+	try:
+		logistic_fx = lambda x: logistic(x, **trainer_params['weights_func']['kwargs'])
+		index = trainer_params['weights_func']['index']
+		def weights_func(weights, epoch):
+			weights[index] = logistic_fx(epoch)
+			return weights
+		trainer_params['params']['weights_func'] = weights_func
+	except KeyError:
+		pass
 
 	if trainer_params['device'] == 'cuda':
 		if torch.cuda.is_available():

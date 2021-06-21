@@ -17,8 +17,8 @@ def mse_loss(y_pred, y_true):
 def raw2spec_mae_loss(y_pred, y_true, stft):
 	"""L1 Loss on raw2spec Spectrograms"""
 	stft = stft.to(y_pred.device)
-	y_pred_2spec = stft_transform(y_pred, stft)
-	y_true_2spec = stft_transform(y_true, stft)
+	y_pred_2spec = stft_mag_transform(y_pred, stft)
+	y_true_2spec = stft_mag_transform(y_true, stft)
 	
 	e = torch.mean(torch.abs(y_true_2spec - y_pred_2spec))
 	return e
@@ -26,8 +26,8 @@ def raw2spec_mae_loss(y_pred, y_true, stft):
 def raw2spec_mse_loss(y_pred, y_true, stft):
 	"""Le Loss on raw2spec Spectrograms"""
 	stft = stft.to(y_pred.device)
-	y_pred_2spec = stft_transform(y_pred, stft)
-	y_true_2spec = stft_transform(y_true, stft)
+	y_pred_2spec = stft_mag_transform(y_pred, stft)
+	y_true_2spec = stft_mag_transform(y_true, stft)
 	
 	e = torch.mean(torch.square(y_true_2spec - y_pred_2spec))
 	return e
@@ -46,8 +46,8 @@ def raw2spec_spectral_convergence_loss(y_pred, y_true, stft):
 	"""Spectral Convergence Loss on raw2spec Spectrograms"""
 	stft = stft.to(y_pred.device)
 	assert stft.dB==False, print('Spectral convergence uses linearly scaled spectrograms')
-	y_pred_2spec = stft_transform(y_pred, stft)
-	y_true_2spec = stft_transform(y_true, stft)
+	y_pred_2spec = stft_mag_transform(y_pred, stft)
+	y_true_2spec = stft_mag_transform(y_true, stft)
 	
 	e = fnorm(y_true_2spec - y_pred_2spec) / fnorm(y_true_2spec)
 	return e
@@ -72,8 +72,8 @@ def neg_si_sdr(y_pred, y_true, zero_mean=False, epsilon=1e-10):
 def total_loss(y_pred, y_true, stft):
 	stft = stft.to(y_pred.device)
 	assert stft.dB==False, print('Spectral convergence uses linearly scaled spectrograms')
-	y_pred_2spec = stft_transform(y_pred, stft)
-	y_true_2spec = stft_transform(y_true, stft)
+	y_pred_2spec = stft_mag_transform(y_pred, stft)
+	y_true_2spec = stft_mag_transform(y_true, stft)
 
 	w1 = 1
 	w2 = 1e-1
@@ -89,8 +89,8 @@ def total_loss(y_pred, y_true, stft):
 def perceptual_loss(y_pred, y_true, stft, weights=[1, 1e-1, 2e-2]):
 	stft = stft.to(y_pred.device)
 	assert stft.dB==False, print('Spectral convergence uses linearly scaled spectrograms')
-	y_pred_2spec = stft_transform(y_pred, stft)
-	y_true_2spec = stft_transform(y_true, stft)
+	y_pred_2spec = stft_mag_transform(y_pred, stft)
+	y_true_2spec = stft_mag_transform(y_true, stft)
 
 	w1, w2, w3 = weights
 
@@ -101,34 +101,21 @@ def perceptual_loss(y_pred, y_true, stft, weights=[1, 1e-1, 2e-2]):
 	l = w1*l1 + w2*l2 + w3*l3
 	return l
 
-@pit_wrapper_loss
-def pit_mae_loss(y_pred, y_true):
-	return mae_loss(y_pred, y_true)
+@vae_recon_wrapper
+def vae_perceptual_loss(*args, stft):
+	return perceptual_loss(*args, stft=stft)
 
-@pit_wrapper_loss
-def pit_raw2spec_mae_loss(y_pred, y_true, stft):
-	return raw2spec_mae_loss(y_pred, y_true, stft)
+def kld_loss(mu, logvar):
+	loss = torch.mean(-0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp(), dim = 1))
+	return loss
 
-@pit_wrapper_loss
-def pit_mse_loss(y_pred, y_true):
-	return mse_loss(y_pred, y_true)
+@vae_kld_wrapper
+def vae_kld_loss(*args):
+	return kld_loss(*args)
 
-@pit_wrapper_loss
-def pit_raw2spec_mse_loss(y_pred, y_true, stft):
-	return raw2spec_mse_loss(y_pred, y_true, stft)
+def latent_loss(x):
+	return x
 
-@pit_wrapper_loss
-def pit_spectral_convergence_loss(y_pred, y_true):
-	return spectral_convergence_loss(y_pred, y_true)
-
-@pit_wrapper_loss
-def pit_raw2spec_spectral_convergence_loss(y_pred, y_true, stft):
-	return raw2spec_spectral_convergence_loss(y_pred, y_true, stft)
-
-@pit_wrapper_loss
-def pit_neg_si_sdr(y_pred, y_true, zero_mean=False, epsilon=1e-10):
-	return neg_si_sdr(y_pred, y_true, zero_mean=zero_mean, epsilon=epsilon)
-
-@pit_wrapper_loss
-def pit_total_loss(y_pred, y_true, stft):
-	return total_loss(y_pred, y_true, stft)
+@vq_vae_loss_wrapper
+def vq_vae_latent_loss(*args):
+	return latent_loss(*args)

@@ -46,14 +46,6 @@ def normalized_accuracy(outputs, data, index=1, classifier=None, peak_accuracy=1
 	acc = (1 - (F.relu(peak_accuracy - acc) / peak_accuracy)).item()
 	return torch.tensor(acc, dtype=torch.float64)
 
-@pit_wrapper_metric
-def pit_si_sdr(y_pred, data, index):
-	return si_sdr(y_pred, data, index)
-
-@pit_wrapper_metric
-def pit_accuracy(outputs, data, index, classifier=None):
-	return accuracy(outputs, data, index, classifier=classifier)
-
-@pit_wrapper_metric
-def pit_probnorm_accuracy(outputs, data, index, classifier=None, peak_accuracy=100):
-	return normalized_accuracy(outputs, data, index, classifier=classifier, peak_accuracy=peak_accuracy)
+@vae_metric_wrapper
+def vae_si_sdr(*args):
+	return si_sdr(*args)

@@ -10,6 +10,7 @@ import os.path
 import tqdm
 import time
 import re
+import glob
 
 class Trainer(object):
 	def __init__(self, model, optimizer, scheduler=None, loss_func=None, metric_func=None, verbose=0, device='cuda', dest=None, **kwargs):
@@ -71,9 +72,13 @@ class Trainer(object):
 			self.multi_loss_weights.append(1)
 		except KeyError:
 			pass
-		
 		assert len(self.multi_loss_weights) == len(self.loss_func), 'Unbalanced loss functions and weights'
-		
+        
+		try:
+			self.weights_func = kwargs['weights_func'] 
+		except KeyError:
+			self.weights_func = None    
+
 		self.dest = dest
 		if dest is not None:
 			assert type(dest) == str
@@ -85,6 +90,7 @@ class Trainer(object):
 					os.mkdir(self.dest + 'Figures')
 					os.mkdir(self.dest + 'Training Logs')
 					os.mkdir(self.dest + 'Models')
+					os.mkdir(self.dest + 'Checkpoints')
 					os.mkdir(self.dest + 'Evaluation Logs')
 					os.mkdir(self.dest + 'Results')
 			else:
@@ -96,23 +102,48 @@ class Trainer(object):
 					raise ValueError('Choose a different name before proceeding.')
 	
 	def fit(self, train_loader, val_loader, epochs):
-		loss_history_train = [[] for _ in self.loss_func]
-		if len(self.loss_func) > 1:
-			loss_history_train.append([]) 
-		
-		loss_history_val = [[] for _ in self.loss_func]
-		if len(self.loss_func) > 1:
-			loss_history_val.append([])
-		
-		if self.metric_func is not None:
-			metric_history_train = [[] for _ in self.metric_func]
-		
-			metric_history_val = [[] for _ in self.metric_func]
+		ckpts = glob.glob(f'{self.dest}Checkpoints/ckpt*.pth.tar')
+		if len(ckpts) > 0:
+			ckpts = sorted(ckpts, 
+						   key=lambda x: int(re.search('\d+', re.split(r'/', x)[-1])[0]))
+			ckpt_path = ckpts[-1]
+			print(f'Loading ckpt: {ckpt_path}\n')
+			ckpt = torch.load(ckpt_path, 
+							  map_location=self.device)
+			self.model.load_state_dict(ckpt['model_state_dict'])
+			self.optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+			loss_history_train = ckpt['train_losses']
+			loss_history_val = ckpt['val_losses']
+			try:
+				metric_history_train = ckpt['train_metrics']
+				metric_history_val = ckpt['val_metrics']
+			except KeyError:
+				metric_history_train = None
+				metric_history_val = None            
+			if self.scheduler is not None:
+				self.scheduler.load_state_dict(ckpt['scheduler_state_dict'])
+			start_epoch = ckpt['epoch']
+			print(f'Loaded ckpt and restarting at epoch {start_epoch + 1}\n')
 		else:
-			metric_history_train = None
-			metric_history_val = None
+			start_epoch = 0
+
+			loss_history_train = [[] for _ in self.loss_func]
+			if len(self.loss_func) > 1:
+				loss_history_train.append([]) 
+			
+			loss_history_val = [[] for _ in self.loss_func]
+			if len(self.loss_func) > 1:
+				loss_history_val.append([])
+			
+			if self.metric_func is not None:
+				metric_history_train = [[] for _ in self.metric_func]
+			
+				metric_history_val = [[] for _ in self.metric_func]
+			else:
+				metric_history_train = None
+				metric_history_val = None
 		
-		for epoch in range(epochs):
+		for epoch in range(start_epoch, epochs):
 			running_loss_train = [0.0 for _ in self.loss_func]
 			if len(self.loss_func) > 1:
 				running_loss_train.append(0.0)
@@ -138,7 +169,10 @@ class Trainer(object):
 																		running_loss_val, 
 																		running_metric_val)
 			if self.scheduler is not None:
-				self.scheduler.step()
+				try:
+					self.scheduler.step()
+				except TypeError:
+					self.scheduler.step(running_loss_val[-1])
 
 			if self.switcher is not None:
 				if (epoch+1) == self.switcher['epoch']:
@@ -146,11 +180,6 @@ class Trainer(object):
 					self.optimizer = self.switcher['optimizer'](self.model)
 					print(f'                            >>>>> New Optimizer: {self.optimizer}')
 					time.sleep(1)
-
-			if self.saver is not None:
-				if ((epoch+1) >= self.saver['epoch']) and ((epoch+1) % self.saver['save_every'] == 0):
-					file_name = self.dest + 'Models/' + f'saver_epoch{epoch+1}.pt'
-					torch.save(self.model.state_dict(), file_name)
 			
 			endtime = int(np.round(time.time() - starttime, decimals=0))
 			try:
@@ -169,6 +198,26 @@ class Trainer(object):
 					history_i.append(metric_i)
 				for history_i, metric_i in zip(metric_history_val, running_metric_val):
 					history_i.append(metric_i)
+                    
+			if self.weights_func is not None:
+				self.multi_loss_weights = self.weights_func(self.multi_loss_weights, epoch)
+
+			if self.saver is not None:
+				if ((epoch+1) >= self.saver['epoch']) and ((epoch+1) % self.saver['save_every'] == 0):
+					file_name = f'{self.dest}/Checkpoints/ckpt{epoch+1}.pth.tar'
+					ckpt_dict = {
+						'model_state_dict': self.model.state_dict(),
+						'optimizer_state_dict': self.optimizer.state_dict(),
+						'epoch': epoch + 1, 
+						'train_losses': loss_history_train,
+						'val_losses': loss_history_val
+					}
+					if self.metric_func is not None:
+						ckpt_dict['train_metrics'] = metric_history_train
+						ckpt_dict['val_metrics'] = metric_history_val
+					if self.scheduler is not None:
+						ckpt_dict['scheduler_state_dict'] = self.scheduler.state_dict()
+					torch.save(ckpt_dict, file_name) 
 			
 			print_statement = f'Epoch: {epoch+1} \n     >>>>> '
 			counter = 0
@@ -282,7 +331,9 @@ class Trainer(object):
 			running_loss[-1] += total_loss.item()
 			
 			if self.metric_func is not None:
-				metric = [self.metric_func[key](outputs.detach(), data) for key in self.metric_func.keys()]
+				if type(outputs) != list and type(outputs) != tuple:
+					outputs = [outputs]    
+				metric = [self.metric_func[key](*[o.detach() for o in outputs], data) for key in self.metric_func.keys()]
 				running_metric = [r_i + m_i.item() for r_i, m_i in zip(running_metric, metric)]
 		
 		running_loss = [r_i / len(dataloader) for r_i in running_loss]
@@ -307,7 +358,9 @@ class Trainer(object):
 				running_loss[-1] += total_loss.item()
 
 				if self.metric_func is not None:
-					metric = [self.metric_func[key](outputs.detach(), data) for key in self.metric_func.keys()]
+					if type(outputs) != list and type(outputs) != tuple:
+						outputs = [outputs]  
+					metric = [self.metric_func[key](*[o.detach() for o in outputs], data) for key in self.metric_func.keys()]
 					running_metric = [r_i + m_i.item() for r_i, m_i in zip(running_metric, metric)]
 		
 		running_loss = [r_i / len(dataloader) for r_i in running_loss]
@@ -319,6 +372,7 @@ class Trainer(object):
 		return running_loss, running_metric
 	
 	def evaluate(self, dataloader, *args, to_device='cpu', return_data=True):
+		### WORKS FOR SINGLE OUTPUT MODELS###
 		loss_keys = list(self.loss_func.keys())
 		if len(self.loss_func) > 1:
 			loss_keys.append('Total Loss')

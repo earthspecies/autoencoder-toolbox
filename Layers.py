@@ -416,7 +416,6 @@ class VQEmbeddingEMA(nn.Module):
 
 	def forward(self, x):
 		x = x.permute(0, 2, 1).contiguous()
-		print(x.size())
 		M, D = self.embedding.size()
 		x_flat = x.detach().reshape(-1, D)
 

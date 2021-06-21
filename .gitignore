@@ -1,7 +1,7 @@
 __pycache__/
-.ipynb_checkpoints/
-Data/
-Configs/
-*.ipynb
+Drafts
+Data
+CLI.ipynb
 *.pt
+.ipynb_checkpoints/
 *.tar

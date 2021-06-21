@@ -1,0 +1,69 @@
+{
+	"dataset_config":{
+		"name" : "Macaque"
+	},
+	"model_config":{
+		"encoder_config":{
+			"model_name": "ToyConv",
+			"model_params": {
+				"in_size": [null, 1, 24414],
+				"nfft": 610,
+				"hop": 244,
+				"hidden_units": 128,
+				"n_res_blocks": 1,
+				"n_down": 1,
+				"latent_dim": 64,
+				"transform":"stft",
+				"stft_coords":"cartesian",
+				"clamp": true,
+				"vae": false,
+				"verbose": false
+			}
+		},
+		"decoder_config":{
+			"model_name": "ToyConv",
+			"model_params":{
+				"in_size": [null, 64, 51],
+				"out_size": [null, 1, 24414],
+				"nfft": 610,
+				"hop": 244,
+				"hidden_units": 128,
+				"n_res_blocks": 1,
+				"n_up": 1,
+				"latent_dim": 64,
+				"transform":"istft",
+				"istft_coords":"cartesian",
+				"clamp": true,
+				"verbose": false,
+				"crop": 1
+			}
+		},
+		"model_params":{
+			"vae":false,
+			"vq_vae":true,
+			"irmae":false,
+			"mlp_params":{}
+		}
+	},
+	"learning_params":{
+		"batch_size":8,
+		"learning_rate": 4e-4,
+		"epochs": 100
+	},
+	"trainer_params":{
+		"verbose": 1,
+		"device": "cuda",
+		"scheduler": {
+			"type": "plateau",
+			"kwargs":{}
+		},
+		"dest": "MacaqueVQ-VAE",
+		"params":{
+			"model_saver_callback": {
+				"epoch": 1,
+				"save_every": 1
+			},
+			"weights":[1, 1e-1]
+		}
+	}
+}

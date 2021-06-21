@@ -21,7 +21,7 @@ class Autoencoder(BaseAutoencoder):
 		self.decoder = decoder
 		self.irmae = irmae
 		self.vae = vae
-		self.vq_vae = vae
+		self.vq_vae = vq_vae
 		self.verbose = verbose
 		self.encoder.verbose = verbose
 		self.decoder.verbose = verbose
@@ -55,12 +55,16 @@ class Autoencoder(BaseAutoencoder):
 		else:
 			return z
 
-	def decode(self, z):
-		x = self.decoder(z)
+	def decode(self, z, *args):
+		x = self.decoder(z, *args)
 		return x
 
 	def encode_to_latent(self, x):
 		z = self.encode(x)
+		if type(z) == tuple:
+			phase, z = z
+		else:
+			phase = None
 
 		latents = self.latent(z)
 		if self.vae:
@@ -73,7 +77,10 @@ class Autoencoder(BaseAutoencoder):
 
 	def forward(self, x):
 		z = self.encode(x)
-		
+		if type(z) == tuple:
+			phase, z = z
+		else:
+			phase = None
 		latents = self.latent(z)
 		if self.vae:
 			z, mu, logvar = latents
@@ -81,15 +88,17 @@ class Autoencoder(BaseAutoencoder):
 			z, loss, perplexity = latents
 		else:
 			z = latents
-
-		x_hat = self.decode(z)
-
+		if phase is not None:
+			x_hat = self.decode(z, phase)
+		else:
+			x_hat = self.decode(z)
+            
 		if self.vae:
 			return x_hat, x, mu, logvar, z
 		elif self.vq_vae:
 			return x_hat, x, z, loss, perplexity
 		else:
-			return x_hat#, x
+			return x_hat
 
 	def sample(self, n_samples, current_device):
 		z = torch.randn(n_samples, *self._latent_size)
@@ -99,8 +108,3 @@ class Autoencoder(BaseAutoencoder):
 
 	def generate(self, x):
 		return self.forward(x)[0]
-
-#ae = Autoencoder(LightweightConvEncoder(), LightweightConvDecoder(), verbose=True)
-#print(ae(torch.randn(6,1,16000))[0].size())
-#print(ae.encoder._latent_size)
-#rint(ae.sample(10, 'cpu').size())

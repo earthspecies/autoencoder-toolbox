@@ -45,5 +45,5 @@ class BaseAutoencoder(BaseModel):
 	@staticmethod
 	def reparametrization(mu, logvar):
 		sigma = torch.exp(0.5 * logvar)
-		epsilon = torch.distributions.normal.Normal(0, 1).sample(sample_shape=sigma.size())
+		epsilon = torch.distributions.normal.Normal(0, 1).sample(sample_shape=sigma.size()).to(mu.device)
 		return mu + epsilon * sigma
