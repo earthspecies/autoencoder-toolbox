@@ -136,7 +136,7 @@ class ChirpDataset(Dataset):
 
 	@staticmethod
 	def hann_ramp(sample_rate, ramp_duration = 0.005):
-    
+    	"""Credit to Maddie Cusimano"""
 		t = np.arange(start=0, stop=ramp_duration, step=1/sample_rate)
 		off_ramp = 0.5*(1. + np.cos( (np.pi/ramp_duration)*t ))
 

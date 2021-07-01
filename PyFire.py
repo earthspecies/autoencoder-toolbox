@@ -102,6 +102,7 @@ class Trainer(object):
 					raise ValueError('Choose a different name before proceeding.')
 	
 	def fit(self, train_loader, val_loader, epochs):
+		"""Checkpoint loading adapted from work by Maddie Cusimano"""
 		ckpts = glob.glob(f'{self.dest}Checkpoints/ckpt*.pth.tar')
 		if len(ckpts) > 0:
 			ckpts = sorted(ckpts, 
