@@ -68,6 +68,9 @@ if __name__ == '__main__':
 		val_set = MusDB18Dataset(split='test',
 								 n_samples=dataset_config['n_test_samples'],
 								 **dataset_config['signal_params'])
+	elif dataset_config['name'] == 'Geladas':
+		train_set = GeladaDataset(subset='train')
+		val_set = GeladaDataset(subset='test')
         
 	train_loader = DataLoader(train_set,
 							  batch_size=learning_params['batch_size'],

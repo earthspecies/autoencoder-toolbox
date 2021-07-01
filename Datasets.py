@@ -206,3 +206,55 @@ class MusDB18Dataset(torch.utils.data.Dataset):
 		x = track.targets[element].audio.T[0]
 		x = torch.Tensor(x).unsqueeze(dim=0)
 		return x, x
+    
+class GeladaDataset(Dataset):
+	def __init__(self, data_dir='Data/Geladas/annotations.pkl.gzip', subset='train', length=44100, target_label=None):
+		self.table = pd.read_pickle(data_dir)
+		self.subset = subset
+		self.length = length
+		self.target_label = target_label
+		
+		self.audios = self.table.call.apply(lambda x: librosa.util.fix_length(x, self.length)).to_list()
+		if self.target_label is None:
+			self.targets = [0 for _ in self.audios]
+		else:
+			self.labels = self.table[self.target_label].values
+			self.label_dict = {l:i for i,l in enumerate(np.unique(self.labels))}
+			self.int_labels = [self.label_dict[l] for l in self.labels]
+			self.targets = self.int_labels
+		
+		x_train, y_train, x_test, y_test = self.train_test_split(self.audios,
+																 self.targets)
+		if subset == 'train':
+			self.len = len(x_train)
+			self.x = x_train
+			self.y = y_train
+		elif subset == 'test':
+			self.len = len(x_test)
+			self.x = x_test
+			self.y = y_test
+	
+	def __len__(self):
+		return self.len
+	
+	def __getitem__(self, idx):
+		a = torch.tensor(self.x[idx]).unsqueeze(dim=0)
+		if self.target_label is None:
+			return a, a
+		else:
+			y_idx = self.y[idx]
+			l = torch.LongTensor([y_idx]).squeeze()
+			return a, a, l
+	
+	@staticmethod
+	def train_test_split(X, Y, n_folds=5, seed=42):
+		skf = StratifiedKFold(n_splits=5,
+							  shuffle=True,
+							  random_state=seed)
+		train_split, test_split = list(skf.split(X, Y))[0]
+
+		X_train = [X[i] for i in train_split]
+		X_test = [X[i] for i in test_split]
+		Y_train = [Y[i] for i in train_split]
+		Y_test = [Y[i] for i in test_split]
+		return X_train, Y_train, X_test, Y_test

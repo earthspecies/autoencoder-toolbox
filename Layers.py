@@ -70,7 +70,8 @@ class STFT(nn.Module):
 					   onesided=True,
 					   center='True',
 					   pad_mode='reflect',
-					   normalized=False)
+					   normalized=False,
+					   return_complex=False)
 		S_real = S[:, :, :, 0]
 		S_imag = S[:, :, :, 1]
 		if self.coords == 'cartesian':
@@ -135,7 +136,8 @@ class iSTFT(nn.Module):
 		x = torch.istft(S, 
 						n_fft=self.kernel_size, 
 						hop_length=self.stride, 
-						window=self.window).unsqueeze(dim=1)
+						window=self.window,
+						return_complex=False).unsqueeze(dim=1)
 		return x
 
 	def get_out_size(self, in_size):
