@@ -71,6 +71,9 @@ if __name__ == '__main__':
 	elif dataset_config['name'] == 'Geladas':
 		train_set = GeladaDataset(subset='train')
 		val_set = GeladaDataset(subset='test')
+	elif dataset_config['name'] == 'HumpbackWhups':
+		train_set = HumpbackWhupsDataset(subset='train')
+		val_set = HumpbackWhupsDataset(subset='test')
         
 	train_loader = DataLoader(train_set,
 							  batch_size=learning_params['batch_size'],

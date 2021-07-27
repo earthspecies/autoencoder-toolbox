@@ -5,3 +5,6 @@ CLI.ipynb
 *.pt
 .ipynb_checkpoints/
 *.tar
+Humpback*
+Whup*
+Configs/humpback*

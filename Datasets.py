@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import glob
 import re
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, train_test_split
 import pandas as pd
 
 def show_spec(signal, kernel_size=int(25/1000*16000), stride=int(10/1000*16000)):
@@ -136,7 +136,7 @@ class ChirpDataset(Dataset):
 
 	@staticmethod
 	def hann_ramp(sample_rate, ramp_duration = 0.005):
-    	"""Credit to Maddie Cusimano"""
+		"""Credit to Maddie Cusimano"""
 		t = np.arange(start=0, stop=ramp_duration, step=1/sample_rate)
 		off_ramp = 0.5*(1. + np.cos( (np.pi/ramp_duration)*t ))
 
@@ -258,3 +258,39 @@ class GeladaDataset(Dataset):
 		Y_train = [Y[i] for i in train_split]
 		Y_test = [Y[i] for i in test_split]
 		return X_train, Y_train, X_test, Y_test
+    
+class HumpbackWhupsDataset(Dataset):
+	def __init__(self, path='Data/Whups/annotations.dataframe.pkl.gz', sr=24000, length=78708, subset='train'):
+		self.path = path
+		self.sr = sr
+		self.length = length
+		calls = pd.read_pickle(self.path).call
+		
+		fixed_calls = []
+		for c in calls:
+			f = librosa.util.fix_length(c, self.length)
+			fixed_calls.append(f)
+			
+		self.train_data, self.test_data = train_test_split(fixed_calls, 
+														   test_size=0.2, 
+														   random_state=42, 
+														   shuffle=True)
+		self.subset = subset
+		if self.subset == 'train':
+			self.len = len(self.train_data)
+		elif self.subset == 'test':
+			self.len = len(self.test_data)
+			
+	def __len__(self):
+		return self.len
+	
+	def __getitem__(self, idx):
+		
+		if self.subset == 'train':
+			x = self.train_data[idx]
+			x = torch.tensor(x).unsqueeze(dim=0)
+			return x, x
+		else:
+			x = self.test_data[idx]
+			x = torch.tensor(x).unsqueeze(dim=0)
+			return x, x

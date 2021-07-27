@@ -1,0 +1,71 @@
+{
+	"dataset_config":{
+		"name" : "Geladas"
+	},
+	"model_config":{
+		"encoder_config":{
+			"model_name": "ToyConv",
+			"model_params": {
+				"in_size": [null, 1, 44414],
+				"nfft": 1102,
+				"hop": 441,
+				"hidden_units": 128,
+				"n_res_blocks": 1,
+				"n_down": 1,
+				"latent_dim": 64,
+				"transform":"stft",
+				"stft_coords":"cartesian",
+				"clamp": true,
+				"vae": true,
+				"verbose": false
+			}
+		},
+		"decoder_config":{
+			"model_name": "ToyConv",
+			"model_params":{
+				"in_size": [null, 64, 51],
+				"out_size": [null, 1, 44100],
+				"nfft": 1102,
+				"hop": 441,
+				"hidden_units": 128,
+				"n_res_blocks": 1,
+				"n_up": 1,
+				"latent_dim": 64,
+				"transform":"istft",
+				"istft_coords":"cartesian",
+				"clamp": true,
+				"verbose": false,
+				"crop": 1
+			}
+		},
+		"model_params":{
+			"vae":true,
+			"vq_vae":false,
+			"irmae":false
+		}
+	},
+	"learning_params":{
+		"batch_size": 8,
+		"learning_rate": 4e-4,
+		"epochs": 1000
+	},
+	"trainer_params":{
+		"verbose": 1,
+		"device": "cuda",
+		"scheduler": {
+			"type": "multi_step",
+			"kwargs":{
+				"milestones": [100, 250, 500, 750, 950],
+				"gamma": 0.5
+			}
+		},
+		"dest": "GeladaVAE",
+		"params":{
+			"model_saver_callback": {
+				"epoch": 250,
+				"save_every": 50
+			},
+			"weights":[1, 1e-3]
+		}
+	}
+}
